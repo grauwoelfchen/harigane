@@ -1,0 +1,8 @@
+.bundle
+.rbenv-version
+Gemfile.lock
+pkg
+*.log
+*.so
+*.o
+Makefile
