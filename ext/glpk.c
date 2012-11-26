@@ -47,6 +47,13 @@ static VALUE wrap_glp_get_obj_dir(VALUE self, VALUE P) {
   res = glp_get_obj_dir(lp);
   return INT2NUM(res);
 }
+static VALUE wrap_glp_get_obj_val(VALUE self, VALUE P) {
+  double res;
+  glp_prob *lp;
+  Data_Get_Struct(P, glp_prob, lp);
+  res = glp_get_obj_val(lp);
+  return rb_float_new(res);
+}
 static VALUE wrap_glp_set_obj_coef(VALUE self, VALUE P, VALUE j, VALUE coef) {
   glp_prob *lp;
   Data_Get_Struct(P, glp_prob, lp);
@@ -105,17 +112,59 @@ static VALUE wrap_glp_set_col_bnds(
   );
   return Qnil;
 }
+static VALUE wrap_glp_get_col_prim(VALUE self, VALUE P, VALUE j) {
+  glp_prob *lp;
+  double res;
+  Data_Get_Struct(P, glp_prob, lp);
+  res = glp_get_col_prim(lp, NUM2INT(j));
+  return rb_float_new(res);
+}
 static VALUE wrap_glp_load_matrix(
     VALUE self, VALUE P, VALUE ne, VALUE ia, VALUE ja, VALUE ar) {
   glp_prob *lp;
+  int ia_len = RARRAY_LEN(ia);
+  int ja_len = RARRAY_LEN(ja);
+  int ar_len = RARRAY_LEN(ar);
+  int *ia_ary    = malloc((ia_len) * sizeof(int));
+  int *ja_ary    = malloc((ja_len) * sizeof(int));
+  double *ar_ary = malloc((ar_len) * sizeof(double));
+  int k;
   Data_Get_Struct(P, glp_prob, lp);
+  for(k = 0; k < ia_len; k++) {
+    ia_ary[k] = NUM2INT(rb_ary_entry(ia, k));
+  }
+  for(k = 0; k < ja_len; k++) {
+    ja_ary[k] = NUM2INT(rb_ary_entry(ja, k));
+  }
+  for(k = 0; k < ar_len; k++) {
+    ar_ary[k] = NUM2DBL(rb_ary_entry(ar, k));
+  }
   glp_load_matrix(
     lp,
     NUM2INT(ne),
-    (int const (*))RARRAY(ia),
-    (int const (*))RARRAY(ja),
-    (double const (*))RARRAY(ar)
+    (const int *)ia_ary,
+    (const int *)ja_ary,
+    (const double *)ar_ary
   );
+  return Qnil;
+}
+static VALUE wrap_glp_simplex(VALUE self, VALUE P, VALUE parm) {
+  int res;
+  glp_prob *lp;
+  glp_smcp *cp;
+  Data_Get_Struct(P, glp_prob, lp);
+  if (TYPE(parm) == T_NIL) {
+    cp = NULL;
+  } else {
+    Data_Get_Struct(parm, glp_smcp, cp);
+  }
+  res = glp_simplex(lp, (glp_smcp const *)cp);
+  return INT2NUM(res);
+}
+static VALUE wrap_glp_delete_prob(VALUE self, VALUE P) {
+  glp_prob *lp;
+  Data_Get_Struct(P, glp_prob, lp);
+  glp_delete_prob(lp);
   return Qnil;
 }
 
@@ -146,6 +195,7 @@ void Init_glpk() {
   rb_define_module_function(module, "get_prob_name", wrap_glp_get_prob_name, 1);
   rb_define_module_function(module, "set_obj_dir", wrap_glp_set_obj_dir, 2);
   rb_define_module_function(module, "get_obj_dir", wrap_glp_get_obj_dir, 1);
+  rb_define_module_function(module, "get_obj_val", wrap_glp_get_obj_val, 1);
   rb_define_module_function(module, "set_obj_coef", wrap_glp_set_obj_coef, 3);
   rb_define_module_function(module, "add_rows", wrap_glp_add_rows, 2);
   rb_define_module_function(module, "set_row_name", wrap_glp_set_row_name, 3);
@@ -153,7 +203,10 @@ void Init_glpk() {
   rb_define_module_function(module, "add_cols", wrap_glp_add_cols, 2);
   rb_define_module_function(module, "set_col_name", wrap_glp_set_col_name, 3);
   rb_define_module_function(module, "set_col_bnds", wrap_glp_set_col_bnds, 5);
+  rb_define_module_function(module, "get_col_prim", wrap_glp_get_col_prim, 2);
   rb_define_module_function(module, "load_matrix", wrap_glp_load_matrix, 5);
+  rb_define_module_function(module, "simplex", wrap_glp_simplex, 2);
+  rb_define_module_function(module, "delete_prob", wrap_glp_delete_prob, 1);
   // klass
   klass = rb_define_class_under(module, "Problem", rb_cObject);
   rb_define_alloc_func(klass, wrap_glp_prob_allocate);
